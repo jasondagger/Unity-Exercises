@@ -3,27 +3,42 @@ using System;
 using UnityEngine;
 using UnityEngine.Serialization;
 
-public class PlayerController : MonoBehaviour
+public sealed class PlayerController : MonoBehaviour
 {
-    [SerializeField] private Transform[] CeilingRaycasts                 = null;
-    [SerializeField] private Transform[] GroundRaycasts                  = null;
-    [SerializeField] private float       MovementSpeed                   = 3f;
-    [SerializeField] private float       RotationSpeedInDegreesPerSecond = 135f;
-    [SerializeField] private float       InitialJumpVelocity             = 100f;
-    [SerializeField] private float       TerminalFallingVelocity         = -200f;
-    [SerializeField] private int         NumberOfJumps                   = 2;
+    private const float RaycastDistance = 0.15f;
     
+    [SerializeField] private Transform[] RaycastsBackward  = null;
+    [SerializeField] private Transform[] RaycastsDownward  = null;
+    [SerializeField] private Transform[] RaycastsForward   = null;
+    [SerializeField] private Transform[] RaycastsLeftward  = null;
+    [SerializeField] private Transform[] RaycastsRightward = null;
+    [SerializeField] private Transform[] RaycastsUpward    = null;
+    
+    [SerializeField] private float MovementSpeed                   = 3f;
+    [SerializeField] private float RotationSpeedInDegreesPerSecond = 135f;
+    [SerializeField] private float InitialJumpVelocity             = 100f;
+    [SerializeField] private float TerminalFallingVelocity         = -200f;
+    [SerializeField] private int   NumberOfJumps                   = 2;
+    
+    private float m_verticalVelocity       = 0f;
     private int   m_numberOfJumpsRemaining = 2;
     private bool  m_isAscending            = false;
     private bool  m_isDescending           = false;
     private bool  m_isGrounded             = false;
-    private float m_verticalVelocity       = 0f;
+    private bool  m_canMoveForward         = false;
+    private bool  m_canMoveBackward        = false;
+    private bool  m_canMoveLeftward        = false;
+    private bool  m_canMoveRightward       = false;
     
     private void Update()
     {
         this.HandleJump();
         
+        this.HandleDetectionBackward();
         this.HandleDetectionCeiling();
+        this.HandleDetectionForward();
+        this.HandleDetectionLeftward();
+        this.HandleDetectionRightward();
         this.HandleDetectionGround();
         
         this.HandleAscent();
@@ -38,6 +53,27 @@ public class PlayerController : MonoBehaviour
         return this.m_numberOfJumpsRemaining > 0;
     }
     
+    private void HandleDetectionBackward()
+    {
+        this.m_canMoveBackward = true;
+        foreach (var raycast in this.RaycastsBackward)
+        {
+            var hit = Physics.Raycast(
+                origin:      raycast.position, 
+                direction:   -this.transform.forward,
+                maxDistance: PlayerController.RaycastDistance
+            );
+
+            if (hit is false)
+            {
+                continue;
+            }
+            
+            this.m_canMoveBackward = false;
+            break;
+        }
+    }
+    
     private void HandleDetectionCeiling()
     {
         if (this.m_isDescending is true)
@@ -45,12 +81,12 @@ public class PlayerController : MonoBehaviour
             return;
         }
         
-        foreach (var ceilingRaycast in this.CeilingRaycasts)
+        foreach (var raycast in this.RaycastsUpward)
         {
             var hit = Physics.Raycast(
-                origin:      ceilingRaycast.position, 
-                direction:   Vector3.up,
-                maxDistance: 0.15f
+                origin:      raycast.position, 
+                direction:   this.transform.up,
+                maxDistance: PlayerController.RaycastDistance
             );
             if (hit is false)
             {
@@ -64,6 +100,27 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    private void HandleDetectionForward()
+    {
+        this.m_canMoveForward = true;
+        foreach (var raycast in this.RaycastsForward)
+        {
+            var hit = Physics.Raycast(
+                origin:      raycast.position, 
+                direction:   this.transform.forward,
+                maxDistance: PlayerController.RaycastDistance
+            );
+
+            if (hit is false)
+            {
+                continue;
+            }
+            
+            this.m_canMoveForward = false;
+            break;
+        }
+    }
+
     private void HandleDetectionGround()
     {
         if (this.m_isAscending is true)
@@ -73,13 +130,13 @@ public class PlayerController : MonoBehaviour
         
         this.m_isGrounded = false;
         this.m_isDescending = true;
-        foreach (var groundRaycast in this.GroundRaycasts)
+        foreach (var raycast in this.RaycastsDownward)
         {
             var hit = Physics.Raycast(
-                origin:      groundRaycast.position, 
-                direction:   Vector3.down,
+                origin:      raycast.position, 
+                direction:   -this.transform.up,
                 hitInfo:     out var hitInfo,
-                maxDistance: 0.15f
+                maxDistance: PlayerController.RaycastDistance
             );
             if (
                 hit is false || 
@@ -93,6 +150,48 @@ public class PlayerController : MonoBehaviour
             this.m_numberOfJumpsRemaining = this.NumberOfJumps;
             this.m_verticalVelocity = 0f;
             this.m_isDescending = false;
+            break;
+        }
+    }
+    
+    private void HandleDetectionLeftward()
+    {
+        this.m_canMoveLeftward = true;
+        foreach (var raycast in this.RaycastsLeftward)
+        {
+            var hit = Physics.Raycast(
+                origin:      raycast.position, 
+                direction:   -this.transform.right,
+                maxDistance: PlayerController.RaycastDistance
+            );
+
+            if (hit is false)
+            {
+                continue;
+            }
+            
+            this.m_canMoveLeftward = false;
+            break;
+        }
+    }
+    
+    private void HandleDetectionRightward()
+    {
+        this.m_canMoveRightward = true;
+        foreach (var raycast in this.RaycastsRightward)
+        {
+            var hit = Physics.Raycast(
+                origin:      raycast.position,
+                direction:   this.transform.right,
+                maxDistance: PlayerController.RaycastDistance
+            );
+
+            if (hit is false)
+            {
+                continue;
+            }
+            
+            this.m_canMoveRightward = false;
             break;
         }
     }
@@ -162,34 +261,48 @@ public class PlayerController : MonoBehaviour
     {
         var velocity = Vector3.zero;
 
-        var isPressingForward = Input.GetKey(
-            key: KeyCode.W
-        );
-        var isPressingBackward = Input.GetKey(
-            key: KeyCode.S
-        );
-        var isPressingLeftward = Input.GetKey(
-            key: KeyCode.A
-        );
-        var isPressingRightward = Input.GetKey(
-            key: KeyCode.D
-        );
+        if (this.m_canMoveForward is true)
+        {
+            var isPressingForward = Input.GetKey(
+                key: KeyCode.W
+            );
+            if (isPressingForward is true)
+            {
+                velocity.z += Time.deltaTime * this.MovementSpeed;
+            }
+        }
         
-        if (isPressingForward is true)
+        if (this.m_canMoveBackward is true)
         {
-            velocity.z += Time.deltaTime * this.MovementSpeed;
+            var isPressingBackward = Input.GetKey(
+                key: KeyCode.S
+            );
+            if (isPressingBackward is true)
+            {
+                velocity.z -= Time.deltaTime * this.MovementSpeed;
+            }
         }
-        if (isPressingBackward is true)
+        
+        if (this.m_canMoveLeftward is true)
         {
-            velocity.z -= Time.deltaTime * this.MovementSpeed;
+            var isPressingLeftward = Input.GetKey(
+                key: KeyCode.A
+            );
+            if (isPressingLeftward is true)
+            {
+                velocity.x -= Time.deltaTime * this.MovementSpeed;
+            }
         }
-        if (isPressingLeftward is true)
+        
+        if (this.m_canMoveRightward is true)
         {
-            velocity.x -= Time.deltaTime * this.MovementSpeed;
-        }
-        if (isPressingRightward is true)
-        {
-            velocity.x += Time.deltaTime * this.MovementSpeed;
+            var isPressingRightward = Input.GetKey(
+                key: KeyCode.D
+            );
+            if (isPressingRightward is true)
+            {
+                velocity.x += Time.deltaTime * this.MovementSpeed;
+            }
         }
         
         velocity = this.transform.TransformDirection(
@@ -220,11 +333,6 @@ public class PlayerController : MonoBehaviour
         }
         
         this.transform.eulerAngles = eulerAngles;
-    }
-
-    private bool IsGrounded()
-    {
-        return this.m_isGrounded;
     }
 }
 
