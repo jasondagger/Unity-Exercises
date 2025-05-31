@@ -1,43 +1,78 @@
 
+using System;
 using UnityEngine;
 using UnityEngine.Serialization;
 
 public class PlayerController : MonoBehaviour
 {
+    [SerializeField] private Transform[] CeilingRaycasts                 = null;
     [SerializeField] private Transform[] GroundRaycasts                  = null;
     [SerializeField] private float       MovementSpeed                   = 3f;
     [SerializeField] private float       RotationSpeedInDegreesPerSecond = 135f;
     [SerializeField] private float       InitialJumpVelocity             = 100f;
+    [SerializeField] private float       TerminalFallingVelocity         = -200f;
     [SerializeField] private int         NumberOfJumps                   = 2;
     
-    private int       m_numberOfJumpsRemaining = 2;
-    private bool      m_isGrounded             = true;
-    private bool      m_isAscending            = false;
-    private bool      m_isDescending           = false;
-    private float     m_jumpVelocity           = 0f;
-    
-    private void FixedUpdate()
-    {
-        this.HandleJumpAscending();
-        this.HandleJumpDescending();
-    }
+    private int   m_numberOfJumpsRemaining = 2;
+    private bool  m_isAscending            = false;
+    private bool  m_isDescending           = false;
+    private bool  m_isGrounded             = false;
+    private float m_verticalVelocity       = 0f;
     
     private void Update()
     {
-        this.HandleGroundDetection();
         this.HandleJump();
+        
+        this.HandleDetectionCeiling();
+        this.HandleDetectionGround();
+        
+        this.HandleAscent();
+        this.HandleDescent();
+        
         this.HandleRotation();
         this.HandleMovement();
     }
 
     private bool CanJump()
     {
-        return m_numberOfJumpsRemaining > 0;
+        return this.m_numberOfJumpsRemaining > 0;
+    }
+    
+    private void HandleDetectionCeiling()
+    {
+        if (this.m_isDescending is true)
+        {
+            return;
+        }
+        
+        foreach (var ceilingRaycast in this.CeilingRaycasts)
+        {
+            var hit = Physics.Raycast(
+                origin:      ceilingRaycast.position, 
+                direction:   Vector3.up,
+                maxDistance: 0.15f
+            );
+            if (hit is false)
+            {
+                continue;
+            }
+
+            this.m_verticalVelocity = 0f;
+            this.m_isDescending = true;
+            this.m_isAscending = false;
+            break;
+        }
     }
 
-    private void HandleGroundDetection()
+    private void HandleDetectionGround()
     {
+        if (this.m_isAscending is true)
+        {
+            return;
+        }
+        
         this.m_isGrounded = false;
+        this.m_isDescending = true;
         foreach (var groundRaycast in this.GroundRaycasts)
         {
             var hit = Physics.Raycast(
@@ -56,7 +91,7 @@ public class PlayerController : MonoBehaviour
             
             this.m_isGrounded = true;
             this.m_numberOfJumpsRemaining = this.NumberOfJumps;
-            this.m_jumpVelocity = 0f;
+            this.m_verticalVelocity = 0f;
             this.m_isDescending = false;
             break;
         }
@@ -79,20 +114,21 @@ public class PlayerController : MonoBehaviour
         
         this.m_numberOfJumpsRemaining--;
         this.m_isAscending = true;
-        this.m_jumpVelocity = this.InitialJumpVelocity;
+        this.m_isDescending = false;
+        this.m_verticalVelocity = this.InitialJumpVelocity;
     }
 
-    private void HandleJumpAscending()
+    private void HandleAscent()
     {
         if (this.m_isAscending is false)
         {
             return;
         }
         
-        this.transform.position += this.m_jumpVelocity * Time.deltaTime * Vector3.up;
-        this.m_jumpVelocity += Physics.gravity.y * Time.deltaTime;
+        this.transform.position += this.m_verticalVelocity * Time.deltaTime * Vector3.up;
+        this.m_verticalVelocity += Physics.gravity.y * Time.deltaTime;
 
-        if (this.m_jumpVelocity > 0)
+        if (this.m_verticalVelocity > 0)
         {
             return;
         }
@@ -101,15 +137,25 @@ public class PlayerController : MonoBehaviour
         this.m_isDescending = true;
     }
 
-    private void HandleJumpDescending()
+    private void HandleDescent()
     {
         if (this.m_isDescending is false)
         {
             return;
         }
         
-        this.transform.position += this.m_jumpVelocity * Time.deltaTime * Vector3.up;
-        this.m_jumpVelocity += Physics.gravity.y * Time.deltaTime;
+        this.transform.position += this.m_verticalVelocity * Time.deltaTime * Vector3.up;
+
+        if (this.m_verticalVelocity <= this.TerminalFallingVelocity)
+        {
+            return;
+        }
+        
+        this.m_verticalVelocity += Physics.gravity.y * Time.deltaTime;
+        if (this.m_verticalVelocity <= this.TerminalFallingVelocity)
+        {
+            this.m_verticalVelocity = this.TerminalFallingVelocity;
+        }
     }
     
     private void HandleMovement()
